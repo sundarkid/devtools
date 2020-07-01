@@ -1,0 +1,108 @@
+version: "3.1"
+services:
+  jenkins:
+    image: jenkins/jenkins:2.235.1-lts
+    ports:
+      - "8000:8080"
+      - "50000:50000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock # Expose the docker daemon in the container
+      - ./jenkins:/var/jenkins_home # Avoid mysql volume mount issue
+    networks:
+      - backend
+
+  node-red:
+    container_name: node-red
+    image: nodered/node-red
+    ports:
+      - "1880:1880"
+    volumes:
+      - ./node-red:/data/
+    networks:
+      - backend
+
+  mongo:
+    container_name: mongo
+    image: mongo
+    environment:
+      - MONGO_INITDB_DATABASE=inventory
+      - MONGO_INITDB_ROOT_USERNAME=user
+      - MONGO_INITDB_ROOT_PASSWORD=p@$$w0rd
+    ports:
+      - "27017-27019:27017-27019"
+    volumes:
+      - ./mongo:/data/db
+    networks:
+      - backend
+
+  mongo-express:
+    container_name: mongo-express
+    image: mongo-express
+    restart: always
+    environment:
+      - ME_CONFIG_BASICAUTH_USERNAME=mongo
+      - ME_CONFIG_BASICAUTH_PASSWORD=mongo
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=user
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=p@$$w0rd
+      - ME_CONFIG_MONGODB_SERVER=mongo
+    external_links:
+      - mongo:mongo
+    ports:
+      - "8081:8081"
+    networks:
+      - backend
+    depends_on:
+      - mongo
+
+  dashboard:
+    image: dashboard:latest
+    container_name: dashboard
+    restart: always
+    ports:
+      - "10001:80"
+    networks:
+      - backend
+
+  # To install cockroach DB cluster setup
+  # https://kb.objectrocket.com/cockroachdb/docker-compose-and-cockroachdb-1151
+  # Creating User in the DB - https://www.cockroachlabs.com/docs/stable/authorization.html#roles
+  cocroachdb_node1:
+    container_name: cocroachdb_node1
+    image: cockroachdb/cockroach:v20.1.0
+    volumes:
+      - ./cockroach/node_1:/cockroach/cockroach-data
+    command: start --insecure
+    ports:
+      - "26257:26257"
+      - "8080:8080"
+    networks:
+      backend:
+        aliases:
+          - node_1
+
+  cocroachdb_node2:
+    container_name: cocroachdb_node2
+    image: cockroachdb/cockroach:v20.1.0
+    volumes:
+      - ./cockroach/node_2:/cockroach/cockroach-data
+    command: start --insecure --join=node_1
+    networks:
+      backend:
+        aliases:
+          - node_2
+
+  cocroachdb_node3:
+    container_name: cocroachdb_node3
+    image: cockroachdb/cockroach:v20.1.0
+    volumes:
+      - ./cockroach/node_3:/cockroach/cockroach-data
+    command: start --insecure --join=node_1
+    networks:
+      backend:
+        aliases:
+          - node_3
+
+networks:
+  backend:
+    driver: "bridge"
